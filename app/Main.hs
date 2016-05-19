@@ -1,6 +1,12 @@
 module Main where
 
-import Lib
+import API
+import Network.Wai
+import Network.Wai.Handler.Warp
+import Servant
 
 main :: IO ()
-main = startApp
+main = run 8081 app
+
+app :: Application
+app = serve crosswordAPIProxy server
