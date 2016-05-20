@@ -1,84 +1,108 @@
-{-# LANGUAGE DeriveGeneric #-}
-{-# LANGUAGE DataKinds #-}
-{-# LANGUAGE TypeOperators #-}
+{-# LANGUAGE DataKinds        #-}
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE TypeOperators    #-}
 
-module API where
+module Api where
 
-import Data.Aeson.Types
-import GHC.Generics
+import Control.Monad.Except
+import Control.Monad.Reader.Class
+import Control.Monad.Reader         ( ReaderT, runReaderT )
+import Data.Int                     ( Int64 )
+import Database.Persist.Postgresql  ( get
+                                    , insert
+                                    , delete
+                                    , replace
+                                    , selectList
+                                    , selectFirst
+                                    , fromSqlKey
+                                    , toSqlKey
+                                    , Entity(..)
+                                    , (==.)
+                                    )
+import Network.Wai                  ( Application )
 import Servant
+import Config                       ( Config(..) )
+import Models
 
 
--- API Definition:
+type API =
+       "crosswords"
+         :> Get '[JSON] [Crossword]
+  :<|> "crosswords"
+         :> Capture "uuid" String
+         :> Get '[JSON] Crossword
+  -- :<|> "crosswords"
+  --        :> ReqBody '[JSON] Crossword
+  --        :> Post '[JSON] Crossword
+  -- :<|> "crosswords"
+  --        :> Capture "id" CrosswordId
+  --        :> Delete '[JSON] ()
+  -- :<|> "crosswords"
+  --        :> Capture "id" CrosswordId
+  --        :> ReqBody '[JSON] Crossword
+  --        :> Put '[JSON] Crossword
 
-type CrosswordAPI = "crosswords" :> Get '[JSON] [Crossword]
+-- This is not available in servant-0.5 so define it ourselves:
+type Handler = ExceptT ServantErr IO
 
--- The type returned by the Handler monad must match the second
--- argument of the HTTP method combinator used for out endpoint.
-server :: Server CrosswordAPI
-server = return [easyCrossword]
+-- The context in which our API actions will run:
+type AppM = ReaderT Config Handler
 
-crosswordAPIProxy :: Proxy CrosswordAPI
-crosswordAPIProxy = Proxy
+api :: Proxy API
+api = Proxy
 
--- Model:
+app :: Config -> Application
+app config = serve api (readerServer config)
 
-data Crossword = Crossword
-  { rows :: [Row]
-  , solved :: Bool
-  } deriving (Eq, Show, Generic)
+readerServer :: Config -> Server API
+readerServer config = enter (readerToHandler config) readerServerT
 
-instance ToJSON Crossword
+-- Allow the injecting of Config while still returning Handler:
+readerToHandler :: Config -> AppM :~> Handler
+readerToHandler config = Nat $ \x -> runReaderT x config
 
-type Row = [Square]
+readerServerT :: ServerT API AppM
+readerServerT = listCrosswords
+           :<|> getCrossword
+           -- :<|> createCrossword
+           -- :<|> deleteCrossword
+           -- :<|> updateCrossword
 
-data Square = Square
-  { number :: Maybe Int
-  , letter :: Maybe Char
-  , fillable :: Bool
-  , coord :: (Int, Int)
-  } deriving (Eq, Show, Generic)
 
-instance ToJSON Square
+-- Crossword API:
 
--- Sample Data:
+listCrosswords :: ReaderT Config Handler [Crossword]
+listCrosswords = do
+    storedCrosswords <- runDb (selectList [] [])
+    let crosswords = map (storedCrosswordToCrossword [] . entityVal) storedCrosswords
+    return crosswords
 
-easyCrossword :: Crossword
-easyCrossword =
-  Crossword
-  { rows =
-      [
-        [ Square (Just 1) Nothing True  ( 0, 0 )
-        , Square Nothing  Nothing True  ( 0, 1 )
-        , Square (Just 2) Nothing True  ( 0, 2 )
-        , Square Nothing  Nothing True  ( 0, 3 )
-        , Square (Just 3) Nothing True  ( 0, 4 )
-        ]
-      , [ Square Nothing  Nothing True  ( 1, 0 )
-        , Square Nothing  Nothing False ( 1, 1 )
-        , Square Nothing  Nothing True  ( 1, 2 )
-        , Square Nothing  Nothing False ( 1, 3 )
-        , Square Nothing  Nothing True  ( 1, 4 )
-        ]
-      , [ Square (Just 4) Nothing True  ( 2, 0 )
-        , Square Nothing  Nothing True  ( 2, 1 )
-        , Square Nothing  Nothing True  ( 2, 2 )
-        , Square Nothing  Nothing True  ( 2, 3 )
-        , Square Nothing  Nothing True  ( 2, 4 )
-        ]
-      , [ Square Nothing  Nothing True  ( 3, 0 )
-        , Square Nothing  Nothing False ( 3, 1 )
-        , Square Nothing  Nothing True  ( 3, 2 )
-        , Square Nothing  Nothing False ( 3, 3 )
-        , Square Nothing  Nothing True  ( 3, 4 )
-        ]
-      , [ Square (Just 5) Nothing True  ( 4, 0 )
-        , Square Nothing  Nothing True  ( 4, 1 )
-        , Square Nothing  Nothing True  ( 4, 2 )
-        , Square Nothing  Nothing True  ( 4, 3 )
-        , Square Nothing  Nothing True  ( 4, 4 )
-        ]
-      ]
-  , solved = False
-  }
+getCrossword :: String -> AppM Crossword
+getCrossword uuid = do
+    maybeStoredCrossword <- runDb (selectFirst [StoredCrosswordUuid ==. uuid] [])
+    maybeStoredSquares <- runDb (selectList [StoredSquareStoredCrosswordUuid ==. uuid] [])
+    let
+      maybeSquares = fmap (storedSquareToSquare . entityVal) maybeStoredSquares
+      maybeCrossword = fmap (storedCrosswordToCrossword maybeSquares . entityVal) maybeStoredCrossword
+    case maybeCrossword of
+         Nothing -> throwError err404
+         Just quiz -> return quiz
 
+-- createCrossword :: Crossword -> AppM Crossword
+-- createCrossword quiz = do
+--     newCrosswordId <- runDb (insert (StoredCrossword (quizName quiz) (quizDescription quiz)))
+--     maybeStoredCrossword <- runDb (selectFirst [StoredCrosswordId ==. newCrosswordId] [])
+--     let maybeCrossword = fmap crosswordFromDb maybeStoredCrossword
+--     case maybeCrossword of
+--          Nothing -> throwError err404
+--          Just quiz -> return quiz
+
+-- deleteCrossword :: StoredCrosswordId -> AppM ()
+-- deleteCrossword quizId = do
+--   runDb (delete quizId)
+--   return ()
+
+-- updateCrossword :: StoredCrosswordId -> Crossword -> AppM Crossword
+-- updateCrossword quizId quiz = do
+--   runDb (replace quizId $ StoredCrossword (quizName quiz) (quizDescription quiz))
+--   return quiz

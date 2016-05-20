@@ -1,49 +1,93 @@
 name:                crosswords
 version:             0.1.0.0
-synopsis:            Initial project template from stack
-description:         Please see README.md
-homepage:            https://github.com/githubuser/crosswords#readme
-license:             BSD3
+synopsis:            Crosswords API
+description:         Crosswords API
+license:             MIT
 license-file:        LICENSE
-author:              Author name here
-maintainer:          example@example.com
-copyright:           2016 Author name here
+author:              Kieran Trezona-le Comte
+maintainer:          trezona.lecomte@gmail.com
+copyright:           2016 Powershop NZ Ltd.
 category:            Web
 build-type:          Simple
--- extra-source-files:
-cabal-version:       >=1.10
-
-library
-  hs-source-dirs:      src
-  exposed-modules:     Lib
-                     , API
-  build-depends:       base >= 4.7 && < 5
-                     , aeson
-                     , servant-server
-                     , wai
-                     , warp
-  default-language:    Haskell2010
-
-executable crosswords-exe
-  hs-source-dirs:      app
-  main-is:             Main.hs
-  ghc-options:         -threaded -rtsopts -with-rtsopts=-N
-  build-depends:       base
-                     , crosswords
-                     , servant-server
-                     , wai
-                     , warp
-  default-language:    Haskell2010
-
-test-suite crosswords-test
-  type:                exitcode-stdio-1.0
-  hs-source-dirs:      test
-  main-is:             Spec.hs
-  build-depends:       base
-                     , crosswords
-  ghc-options:         -threaded -rtsopts -with-rtsopts=-N
-  default-language:    Haskell2010
+cabal-version:       >=1.18
 
 source-repository head
-  type:     git
-  location: https://github.com/githubuser/crosswords
+    type:
+        git
+    location:
+        https://www.github.com/trezona-lecomte/crosswords
+
+executable crosswords-exe
+    main-is:
+        Main.hs
+    build-depends:
+                    base >=4.7
+                  , elm-export >= 0.3.0.0
+                  , monad-logger
+                  , persistent-postgresql
+                  , crosswords
+                  , servant
+                  , wai
+                  , warp
+    hs-source-dirs:
+        app
+    default-language:
+        Haskell2010
+
+executable elm-generator
+    main-is:
+        Main.hs
+    build-depends:
+                    base >=4.7
+                  , crosswords
+                  , servant
+                  , servant-elm
+                  , elm-export >= 0.3.0.0
+    hs-source-dirs:
+        generator
+    default-language:
+        Haskell2010
+
+library
+    default-language:
+        Haskell2010
+    hs-source-dirs:
+        src
+    exposed-modules:
+        Config
+      , Models
+      , Api
+    build-depends:
+                    base >= 4.7
+                  , aeson
+                  , bytestring
+                  , monad-control
+                  , monad-logger
+                  , mtl
+                  , persistent
+                  , persistent-postgresql
+                  , persistent-template
+                  , servant
+                  , servant-server
+                  , transformers
+                  , wai
+                  , wai-cors
+                  , wai-extra
+                  , warp
+
+-- test-suite servant-persistent-test
+--     type:
+--         exitcode-stdio-1.0
+--     hs-source-dirs:
+--         test
+--     main-is:
+--         Spec.hs
+--     other-modules:
+--         ApiSpec
+--     build-depends:
+--                       base
+--                   , elm-export >= 0.3.0.0
+--                   , crosswords
+--                   , servant
+--     default-language:
+--         Haskell2010
