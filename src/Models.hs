@@ -41,8 +41,7 @@ StoredSquare
 |]
 
 data Crossword = Crossword
-  { rows :: [Row]
-  , solved :: Bool
+  { squares :: [Square]
   } deriving (Eq, Show, Generic)
 
 instance ToJSON Crossword
@@ -61,21 +60,15 @@ data Square = Square
 instance ToJSON Square
 instance FromJSON Square
 
-type Row = [Square]
-
 storedCrosswordToCrossword :: [Square] -> StoredCrossword -> Crossword
 storedCrosswordToCrossword squares StoredCrossword{..} =
-  Crossword { rows = groupBy squaresInSameRow (sortBy compareY squares), solved = storedCrosswordSolved }
+  Crossword { squares = sortBy compareY squares }
 
 compareY :: Square -> Square -> Ordering
 compareY s1 s2
   | y s1 < y s2  = LT
   | y s1 > y s2  = GT
   | otherwise    = EQ
-
-squaresInSameRow :: Square -> Square -> Bool
-squaresInSameRow square1 square2 =
-  y square1 == y square2
 
 storedSquareToSquare :: StoredSquare -> Square
 storedSquareToSquare StoredSquare{..} =

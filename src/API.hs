@@ -93,8 +93,7 @@ getCrossword uuid = do
 
 updateCrossword :: String -> Crossword -> AppM Crossword
 updateCrossword uuid crossword = do
-  let squares = concat $ rows crossword
-  _ <- mapM (updateStoredSquare uuid) squares
+  _ <- mapM (updateStoredSquare uuid) $ squares crossword
   storedSquares <- runDb (selectList [StoredSquareStoredCrosswordUuid ==. uuid] [])
   storedCrossword <- runDb (selectFirst [StoredCrosswordUuid ==. uuid] [])
   let
