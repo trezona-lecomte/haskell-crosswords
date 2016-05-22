@@ -8,16 +8,19 @@ import Control.Monad.Except
 import Control.Monad.Reader.Class
 import Control.Monad.Reader         ( ReaderT, runReaderT )
 import Data.Int                     ( Int64 )
+import Data.Maybe                   ( maybeToList )
 import Database.Persist.Postgresql  ( get
                                     , insert
                                     , delete
                                     , replace
+                                    , updateWhere
                                     , selectList
                                     , selectFirst
                                     , fromSqlKey
                                     , toSqlKey
                                     , Entity(..)
                                     , (==.)
+                                    , (=.)
                                     )
 import Network.Wai                  ( Application )
 import Servant
@@ -31,16 +34,16 @@ type API =
   :<|> "crosswords"
          :> Capture "uuid" String
          :> Get '[JSON] Crossword
+  :<|> "crosswords"
+         :> Capture "uuid" String
+         :> ReqBody '[JSON] Crossword
+         :> Put '[JSON] Crossword
   -- :<|> "crosswords"
   --        :> ReqBody '[JSON] Crossword
   --        :> Post '[JSON] Crossword
   -- :<|> "crosswords"
   --        :> Capture "id" CrosswordId
   --        :> Delete '[JSON] ()
-  -- :<|> "crosswords"
-  --        :> Capture "id" CrosswordId
-  --        :> ReqBody '[JSON] Crossword
-  --        :> Put '[JSON] Crossword
 
 -- This is not available in servant-0.5 so define it ourselves:
 type Handler = ExceptT ServantErr IO
@@ -64,9 +67,9 @@ readerToHandler config = Nat $ \x -> runReaderT x config
 readerServerT :: ServerT API AppM
 readerServerT = listCrosswords
            :<|> getCrossword
+           :<|> updateCrossword
            -- :<|> createCrossword
            -- :<|> deleteCrossword
-           -- :<|> updateCrossword
 
 
 -- Crossword API:
@@ -86,23 +89,40 @@ getCrossword uuid = do
       maybeCrossword = fmap (storedCrosswordToCrossword maybeSquares . entityVal) maybeStoredCrossword
     case maybeCrossword of
          Nothing -> throwError err404
-         Just quiz -> return quiz
+         Just crossword -> return crossword
+
+updateCrossword :: String -> Crossword -> AppM Crossword
+updateCrossword uuid crossword = do
+  let squares = concat $ rows crossword
+  _ <- mapM (updateStoredSquare uuid) squares
+  storedSquares <- runDb (selectList [StoredSquareStoredCrosswordUuid ==. uuid] [])
+  storedCrossword <- runDb (selectFirst [StoredCrosswordUuid ==. uuid] [])
+  let
+    maybeSquares = fmap (storedSquareToSquare . entityVal) storedSquares
+    maybeCrossword = fmap (storedCrosswordToCrossword maybeSquares . entityVal) storedCrossword
+  case maybeCrossword of
+    Nothing -> throwError err404
+    Just c -> return c
+
+updateStoredSquare :: String -> Square -> AppM ()
+updateStoredSquare uuid square =
+  runDb (updateWhere
+          [ StoredSquareX ==. x square
+          , StoredSquareY ==. y square
+          , StoredSquareStoredCrosswordUuid ==. uuid
+          ]
+          [StoredSquareGuessedLetter =. (Just $ maybeToList $ guessedLetter square)])
 
 -- createCrossword :: Crossword -> AppM Crossword
--- createCrossword quiz = do
---     newCrosswordId <- runDb (insert (StoredCrossword (quizName quiz) (quizDescription quiz)))
+-- createCrossword crossword = do
+--     newCrosswordId <- runDb (insert (StoredCrossword (crosswordName crossword) (crosswordDescription crossword)))
 --     maybeStoredCrossword <- runDb (selectFirst [StoredCrosswordId ==. newCrosswordId] [])
 --     let maybeCrossword = fmap crosswordFromDb maybeStoredCrossword
 --     case maybeCrossword of
 --          Nothing -> throwError err404
---          Just quiz -> return quiz
+--          Just crossword -> return crossword
 
 -- deleteCrossword :: StoredCrosswordId -> AppM ()
--- deleteCrossword quizId = do
---   runDb (delete quizId)
+-- deleteCrossword crosswordId = do
+--   runDb (delete crosswordId)
 --   return ()
-
--- updateCrossword :: StoredCrosswordId -> Crossword -> AppM Crossword
--- updateCrossword quizId quiz = do
---   runDb (replace quizId $ StoredCrossword (quizName quiz) (quizDescription quiz))
---   return quiz

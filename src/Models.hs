@@ -18,6 +18,7 @@ import GHC.Generics                ( Generic )
 import Control.Monad.IO.Class
 import Control.Monad.Reader.Class
 import Data.Int                    ( Int64 )
+import Data.List                   ( groupBy )
 import Data.Maybe                  ( fromMaybe, listToMaybe )
 import Database.Persist.Sql
 import Database.Persist.TH
@@ -41,7 +42,7 @@ StoredSquare
 |]
 
 data Crossword = Crossword
-  { rows :: [Square]
+  { rows :: [Row]
   , solved :: Bool
   } deriving (Eq, Show, Generic)
 
@@ -53,16 +54,23 @@ data Square = Square
   , guessedLetter :: Maybe Char
   -- , letter :: Maybe Char
   , fillable :: Bool
-  , coord :: (Int, Int)
+  , x :: Int
+  , y :: Int
   -- , crosswordId :: String
   } deriving (Eq, Show, Generic)
 
 instance ToJSON Square
 instance FromJSON Square
 
+type Row = [Square]
+
 storedCrosswordToCrossword :: [Square] -> StoredCrossword -> Crossword
-storedCrosswordToCrossword rows StoredCrossword{..} =
-  Crossword { rows = rows, solved = storedCrosswordSolved }
+storedCrosswordToCrossword squares StoredCrossword{..} =
+  Crossword { rows = groupBy squaresInSameRow squares, solved = storedCrosswordSolved }
+
+squaresInSameRow :: Square -> Square -> Bool
+squaresInSameRow square1 square2 =
+  y square1 == y square2
 
 storedSquareToSquare :: StoredSquare -> Square
 storedSquareToSquare StoredSquare{..} =
@@ -70,7 +78,8 @@ storedSquareToSquare StoredSquare{..} =
          , guessedLetter = listToMaybe $ fromMaybe " " storedSquareGuessedLetter
          -- , letter = listToMaybe $ fromMaybe " " storedSquareLetter
          , fillable = storedSquareFillable
-         , coord = (storedSquareX, storedSquareY)
+         , x = storedSquareX
+         , y = storedSquareY
          -- , crosswordId = storedSquareStoredCrosswordUuid
          }
 
