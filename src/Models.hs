@@ -18,7 +18,7 @@ import GHC.Generics                ( Generic )
 import Control.Monad.IO.Class
 import Control.Monad.Reader.Class
 import Data.Int                    ( Int64 )
-import Data.List                   ( groupBy )
+import Data.List                   ( groupBy, sortBy )
 import Data.Maybe                  ( fromMaybe, listToMaybe )
 import Database.Persist.Sql
 import Database.Persist.TH
@@ -66,7 +66,13 @@ type Row = [Square]
 
 storedCrosswordToCrossword :: [Square] -> StoredCrossword -> Crossword
 storedCrosswordToCrossword squares StoredCrossword{..} =
-  Crossword { rows = groupBy squaresInSameRow squares, solved = storedCrosswordSolved }
+  Crossword { rows = groupBy squaresInSameRow (sortBy compareY squares), solved = storedCrosswordSolved }
+
+compareY :: Square -> Square -> Ordering
+compareY s1 s2
+  | y s1 < y s2  = LT
+  | y s1 > y s2  = GT
+  | otherwise    = EQ
 
 squaresInSameRow :: Square -> Square -> Bool
 squaresInSameRow square1 square2 =
