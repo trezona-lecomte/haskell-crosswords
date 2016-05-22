@@ -13,11 +13,10 @@
 
 module Models where
 
-import Data.Aeson                  ( ToJSON, FromJSON, toJSON, parseJSON )
+import Data.Aeson
 import GHC.Generics                ( Generic )
-import Control.Monad.IO.Class
+import Control.Monad.IO.Class      ( MonadIO, liftIO )
 import Control.Monad.Reader.Class
-import Data.Int                    ( Int64 )
 import Data.List                   ( groupBy, sortBy )
 import Data.Maybe                  ( fromMaybe, listToMaybe )
 import Database.Persist.Sql
@@ -52,7 +51,7 @@ instance FromJSON Crossword
 data Square = Square
   { number :: Maybe Int
   , guessedLetter :: Maybe Char
-  -- , letter :: Maybe Char
+  , letter :: Maybe Char
   , fillable :: Bool
   , x :: Int
   , y :: Int
@@ -82,7 +81,7 @@ storedSquareToSquare :: StoredSquare -> Square
 storedSquareToSquare StoredSquare{..} =
   Square { number = storedSquareNumber
          , guessedLetter = listToMaybe $ fromMaybe " " storedSquareGuessedLetter
-         -- , letter = listToMaybe $ fromMaybe " " storedSquareLetter
+         , letter = listToMaybe $ fromMaybe " " storedSquareLetter
          , fillable = storedSquareFillable
          , x = storedSquareX
          , y = storedSquareY
